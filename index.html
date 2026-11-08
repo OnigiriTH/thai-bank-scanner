@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ระบบสแกนธนบัตรไทย (Thai Banknote Scanner)</title>
+    <!-- Google Fonts: Prompt -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #070a13;
+            --card-bg: rgba(18, 24, 43, 0.75);
+            --card-border: rgba(255, 255, 255, 0.12);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --theme-color: #3b82f6;
+            --theme-glow: rgba(59, 130, 246, 0.4);
+            --theme-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Prompt', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Ambient Dynamic Background */
+        .ambient-layer {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .ambient-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(90px);
+            opacity: 0.35;
+            animation: floatGlow 14s infinite alternate ease-in-out;
+            transition: background 0.8s ease;
+        }
+
+        .blob-1 {
+            width: 380px;
+            height: 380px;
+            background: radial-gradient(circle, var(--theme-color), transparent 70%);
+            top: -60px;
+            left: -80px;
+        }
+
+        .blob-2 {
+            width: 420px;
+            height: 420px;
+            background: radial-gradient(circle, #8b5cf6, transparent 70%);
+            bottom: 5%;
+            right: -100px;
+            animation-duration: 18s;
+            animation-delay: -4s;
+        }
+
+        .blob-3 {
+            width: 280px;
+            height: 280px;
+            background: radial-gradient(circle, #06b6d4, transparent 70%);
+            top: 45%;
+            left: 20%;
+            animation-duration: 22s;
+            animation-delay: -8s;
+            opacity: 0.2;
+        }
+
+        /* Subtle High-Tech Mesh / Grid Pattern */
+        .grid-pattern {
+            position: absolute;
+            inset: 0;
+            background-image: 
+                radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+                linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 32px 32px;
+            opacity: 0.6;
+        }
+
+        @keyframes floatGlow {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(30px, 40px) scale(1.12); }
+            100% { transform: translate(-25px, 20px) scale(0.92); }
+        }
+
+        /* Top Bar */
+        header {
+            position: relative;
+            z-index: 10;
+            padding: 12px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(11, 17, 33, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .app-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+        }
+
+        .app-title .icon-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #3b82f6, #10b981);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .app-title span {
+            background: linear-gradient(135deg, #f8fafc, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #fff;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(8px);
+        }
+
+        .icon-btn:hover {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .icon-btn:active {
+            transform: scale(0.92);
+        }
+
+        .icon-btn.disabled {
+            opacity: 0.35;
+            filter: grayscale(1);
+        }
+
+        /* Main Container */
+        main {
+            position: relative;
+            z-index: 1;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 14px 18px 24px 18px;
+            gap: 14px;
+            max-width: 520px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Mode Switch Tabs */
+        .mode-tabs {
+            display: flex;
+            background: rgba(18, 24, 43, 0.7);
+            padding: 4px;
+            border-radius: 16px;
+            border: 1px solid var(--card-border);
+            backdrop-filter: blur(12px);
+            gap: 4px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 12px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.88rem;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(139, 92, 246, 0.25));
+            color: #fff;
+            border: 1px solid rgba(139, 92, 246, 0.35);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Viewport / Visual Box */
+        .camera-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            max-height: 40vh;
+            border-radius: 22px;
+            overflow: hidden;
+            background: rgba(10, 14, 26, 0.85);
+            border: 2px solid var(--theme-color);
+            box-shadow: 0 0 35px var(--theme-glow), inset 0 0 20px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+            transition: border-color 0.4s ease, box-shadow 0.4s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #webcam-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #webcam-container canvas {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;
+        }
+
+        /* Image Upload Box inside Viewport */
+        .upload-preview-box {
+            display: none;
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: #000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-preview-box.active {
+            display: flex;
+        }
+
+        #image-preview {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .upload-prompt {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+            border: 2px dashed rgba(255, 255, 255, 0.25);
+            border-radius: 20px;
+            transition: all 0.25s ease;
+        }
+
+        .upload-prompt:hover {
+            border-color: var(--theme-color);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .upload-prompt-icon {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            filter: drop-shadow(0 4px 8px var(--theme-glow));
+        }
+
+        .upload-prompt-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .upload-prompt-sub {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        /* Viewfinder Frame Overlay */
+        .viewfinder {
+            position: absolute;
+            inset: 12px;
+            border-radius: 14px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .reticle-corners {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .reticle-corners::before,
+        .reticle-corners::after {
+            content: '';
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-color: #fff;
+            border-style: solid;
+            opacity: 0.85;
+            filter: drop-shadow(0 0 4px rgba(255,255,255,0.5));
+        }
+
+        .reticle-corners::before {
+            top: 0;
+            left: 0;
+            border-width: 3px 0 0 3px;
+            border-top-left-radius: 10px;
+        }
+
+        .reticle-corners::after {
+            bottom: 0;
+            right: 0;
+            border-width: 0 3px 3px 0;
+            border-bottom-right-radius: 10px;
+        }
+
+        .corner-tr, .corner-bl {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-color: #fff;
+            border-style: solid;
+            opacity: 0.85;
+            filter: drop-shadow(0 0 4px rgba(255,255,255,0.5));
+        }
+
+        .corner-tr {
+            top: 0;
+            right: 0;
+            border-width: 3px 3px 0 0;
+            border-top-right-radius: 10px;
+        }
+
+        .corner-bl {
+            bottom: 0;
+            left: 0;
+            border-width: 0 0 3px 3px;
+            border-bottom-left-radius: 10px;
+        }
+
+        .scan-laser {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--theme-color), #fff, var(--theme-color), transparent);
+            box-shadow: 0 0 16px var(--theme-color);
+            top: 0;
+            animation: scan 2.4s ease-in-out infinite alternate;
+        }
+
+        @keyframes scan {
+            0% { top: 6%; opacity: 0.3; }
+            50% { opacity: 1; }
+            100% { top: 94%; opacity: 0.3; }
+        }
+
+        .camera-hint {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(7, 10, 19, 0.75);
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 0.76rem;
+            color: #cbd5e1;
+            white-space: nowrap;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Result Display Card (Glassmorphic) */
+        .result-card {
+            background: var(--card-bg);
+            border-radius: 22px;
+            padding: 20px 22px;
+            border: 2px solid var(--theme-color);
+            box-shadow: 0 12px 40px var(--theme-glow), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            min-height: 175px;
+        }
+
+        .banknote-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 16px;
+            border-radius: 30px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .banknote-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--theme-color);
+            box-shadow: 0 0 10px var(--theme-color);
+            display: inline-block;
+        }
+
+        .value-display {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 10px;
+            line-height: 1;
+            margin: 6px 0 10px 0;
+        }
+
+        .value-number {
+            font-size: clamp(4rem, 16vw, 5.5rem);
+            font-weight: 900;
+            letter-spacing: -2.5px;
+            color: var(--theme-color);
+            text-shadow: 0 0 35px var(--theme-glow);
+            transition: all 0.3s ease;
+        }
+
+        .value-unit {
+            font-size: clamp(1.4rem, 5.5vw, 2.1rem);
+            font-weight: 700;
+            color: #cbd5e1;
+        }
+
+        .spoken-text {
+            font-size: 1.18rem;
+            font-weight: 600;
+            color: #f1f5f9;
+            min-height: 1.6em;
+            margin-bottom: 10px;
+            transition: color 0.3s ease;
+        }
+
+        /* Confidence Progress Bar */
+        .confidence-container {
+            width: 100%;
+            margin-top: 4px;
+        }
+
+        .confidence-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .progress-track {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 99px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--theme-color), #fff);
+            border-radius: 99px;
+            transition: width 0.25s ease, background-color 0.3s ease;
+            box-shadow: 0 0 12px var(--theme-color);
+        }
+
+        /* Mini Probability Grid */
+        .prob-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .prob-item {
+            background: rgba(18, 24, 43, 0.6);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 10px 4px;
+            text-align: center;
+            font-size: 0.72rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .prob-item.active {
+            border-color: var(--theme-color);
+            background: rgba(255, 255, 255, 0.12);
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 20px var(--theme-glow);
+        }
+
+        .prob-item .prob-name {
+            font-weight: 800;
+            color: #fff;
+            font-size: 0.9rem;
+        }
+
+        .prob-item .prob-val {
+            color: var(--text-secondary);
+            margin-top: 3px;
+            font-family: monospace;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        /* Action bar for Upload Mode */
+        .upload-actions {
+            display: none;
+            gap: 10px;
+            margin-top: 4px;
+        }
+
+        .upload-actions.active {
+            display: flex;
+        }
+
+        .btn-action {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            backdrop-filter: blur(8px);
+            transition: all 0.25s ease;
+        }
+
+        .btn-action:hover {
+            background: rgba(255, 255, 255, 0.16);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-action.primary {
+            background: linear-gradient(135deg, var(--theme-color), #7c3aed);
+            border: none;
+            box-shadow: 0 4px 18px var(--theme-glow);
+        }
+
+        /* Start / Permission Overlay */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(7, 10, 19, 0.94);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            z-index: 99;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+            transition: opacity 0.4s ease, visibility 0.4s;
+        }
+
+        .overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .start-icon {
+            font-size: 4.5rem;
+            margin-bottom: 18px;
+            animation: pulse-icon 2.5s infinite;
+            filter: drop-shadow(0 8px 24px rgba(37, 99, 235, 0.5));
+        }
+
+        @keyframes pulse-icon {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
+        .overlay h1 {
+            font-size: 1.75rem;
+            font-weight: 800;
+            margin-bottom: 10px;
+            color: #fff;
+            letter-spacing: -0.5px;
+        }
+
+        .overlay p {
+            color: #94a3b8;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            max-width: 320px;
+            margin-bottom: 28px;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            color: #fff;
+            border: none;
+            padding: 16px 38px;
+            font-size: 1.15rem;
+            font-weight: 700;
+            font-family: inherit;
+            border-radius: 99px;
+            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.5);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-start:active {
+            transform: scale(0.96);
+        }
+
+        /* Status Toast */
+        .toast {
+            position: fixed;
+            top: 72px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #fff;
+            padding: 8px 18px;
+            border-radius: 30px;
+            font-size: 0.82rem;
+            backdrop-filter: blur(12px);
+            z-index: 50;
+            opacity: 0;
+            transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: none;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Glowing Background Spheres -->
+    <div class="ambient-layer">
+        <div class="grid-pattern"></div>
+        <div class="ambient-blob blob-1" id="blob-1"></div>
+        <div class="ambient-blob blob-2" id="blob-2"></div>
+        <div class="ambient-blob blob-3" id="blob-3"></div>
+    </div>
+
+    <!-- Hidden Image File Input -->
+    <input type="file" id="file-input" accept="image/*" style="display: none;" onchange="handleFileSelected(event)">
+
+    <!-- Top Navigation Header -->
+    <header>
+        <div class="app-title">
+            <div class="icon-badge">💵</div>
+            <span>ThaiBank AI</span>
+        </div>
+        <div class="header-actions">
+            <button id="btn-upload-hdr" class="icon-btn" title="อัปโหลดรูปภาพ" onclick="triggerFileInput()">
+                📁
+            </button>
+            <button id="btn-switch-cam" class="icon-btn" title="สลับกล้องหน้า/หลัง" onclick="toggleCamera()">
+                📷
+            </button>
+            <button id="btn-sound" class="icon-btn" title="เปิด/ปิดเสียงอ่าน" onclick="toggleSound()">
+                🔊
+            </button>
+            <button id="btn-vibrate" class="icon-btn" title="เปิด/ปิดระบบสั่น" onclick="toggleVibration()">
+                📳
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Application Flow -->
+    <main>
+        <!-- Mode Switcher Tabs -->
+        <div class="mode-tabs">
+            <button class="tab-btn active" id="tab-cam" onclick="switchMode('camera')">
+                <span>📹</span> สแกนกล้องสด
+            </button>
+            <button class="tab-btn" id="tab-upload" onclick="switchMode('upload')">
+                <span>🖼️</span> อัปโหลดรูปภาพ
+            </button>
+        </div>
+
+        <!-- Camera & Image Viewport Box -->
+        <div class="camera-wrapper" id="camera-box">
+            <!-- 1. Live Camera Stream Container -->
+            <div id="webcam-container"></div>
+
+            <!-- 2. Image Upload Preview Container -->
+            <div class="upload-preview-box" id="upload-preview-box">
+                <div class="upload-prompt" id="upload-prompt" onclick="triggerFileInput()">
+                    <div class="upload-prompt-icon">📤</div>
+                    <div class="upload-prompt-title">แตะเพื่อเลือกรูปธนบัตร</div>
+                    <div class="upload-prompt-sub">รองรับไฟล์ JPG, PNG หรือภาพถ่ายจากแกลเลอรี</div>
+                </div>
+                <img id="image-preview" alt="Banknote Preview" style="display:none;" />
+            </div>
+
+            <!-- Viewfinder Laser & Reticle Guideline -->
+            <div class="viewfinder" id="viewfinder">
+                <div class="reticle-corners"></div>
+                <div class="corner-tr"></div>
+                <div class="corner-bl"></div>
+                <div class="scan-laser" id="laser"></div>
+                <div class="camera-hint" id="camera-hint">ถือธนบัตรให้อยู่ในกรอบภาพ</div>
+            </div>
+        </div>
+
+        <!-- Upload Mode Actions (Re-upload / Switch back) -->
+        <div class="upload-actions" id="upload-actions">
+            <button class="btn-action primary" onclick="triggerFileInput()">
+                <span>🔄</span> เลือกรูปใหม่
+            </button>
+            <button class="btn-action" onclick="switchMode('camera')">
+                <span>📹</span> กลับสู่กล้องสด
+            </button>
+        </div>
+
+        <!-- Main Output Card -->
+        <div class="result-card" id="result-card">
+            <div class="banknote-badge" id="badge-status">
+                <span class="dot"></span>
+                <span id="badge-text">กำลังรอตรวจจับ...</span>
+            </div>
+
+            <div class="value-display">
+                <div class="value-number" id="val-number">--</div>
+                <div class="value-unit" id="val-unit">บาท</div>
+            </div>
+
+            <div class="spoken-text" id="spoken-text">กรุณาส่องกล้องหรืออัปโหลดรูปธนบัตร</div>
+
+            <!-- Confidence Progress Indicator -->
+            <div class="confidence-container">
+                <div class="confidence-info">
+                    <span>ความแม่นยำ AI</span>
+                    <span id="confidence-pct">0%</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-time Mini Probabilities Grid -->
+        <div class="prob-grid">
+            <div class="prob-item" id="prob-20">
+                <div class="prob-name" style="color: #22c55e;">20</div>
+                <div class="prob-val" id="val-20">0%</div>
+            </div>
+            <div class="prob-item" id="prob-50">
+                <div class="prob-name" style="color: #3b82f6;">50</div>
+                <div class="prob-val" id="val-50">0%</div>
+            </div>
+            <div class="prob-item" id="prob-100">
+                <div class="prob-name" style="color: #ef4444;">100</div>
+                <div class="prob-val" id="val-100">0%</div>
+            </div>
+            <div class="prob-item" id="prob-500">
+                <div class="prob-name" style="color: #a855f7;">500</div>
+                <div class="prob-val" id="val-500">0%</div>
+            </div>
+            <div class="prob-item" id="prob-1000">
+                <div class="prob-name" style="color: #a8a29e;">1000</div>
+                <div class="prob-val" id="val-1000">0%</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Start / Permission Modal -->
+    <div class="overlay" id="start-overlay">
+        <div class="start-icon">💵</div>
+        <h1>สแกนธนบัตรไทย AI</h1>
+        <p>จำแนกมูลค่าธนบัตร 20, 50, 100, 500, 1,000 บาท ผ่านกล้องมือถือหรืออัปโหลดรูปภาพ พร้อมอ่านออกเสียงทันที</p>
+        <button class="btn-start" onclick="startApp()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            แตะเพื่อเริ่มใช้งาน
+        </button>
+    </div>
+
+    <!-- Notification Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- TensorFlow.js & Teachable Machine Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+    <script>
+        // Teachable Machine Model URL
+        const MODEL_URL = "https://teachablemachine.withgoogle.com/models/VY8izNkMX/";
+
+        // Banknote Theme Settings (Color, Spoken Words, Labels)
+        const BANKNOTE_CONFIG = {
+            "20": {
+                name: "ยี่สิบบาท",
+                spoken: "ธนบัตรยี่สิบบาท",
+                color: "#22c55e",       // Emerald Green
+                glow: "rgba(34, 197, 94, 0.45)"
+            },
+            "50": {
+                name: "ห้าสิบบาท",
+                spoken: "ธนบัตรห้าสิบบาท",
+                color: "#3b82f6",       // Royal Blue
+                glow: "rgba(59, 130, 246, 0.45)"
+            },
+            "100": {
+                name: "หนึ่งร้อยบาท",
+                spoken: "ธนบัตรหนึ่งร้อยบาท",
+                color: "#ef4444",       // Ruby Red
+                glow: "rgba(239, 68, 68, 0.45)"
+            },
+            "500": {
+                name: "ห้าร้อยบาท",
+                spoken: "ธนบัตรห้าร้อยบาท",
+                color: "#a855f7",       // Radiant Purple
+                glow: "rgba(168, 85, 247, 0.45)"
+            },
+            "1000": {
+                name: "หนึ่งพันบาท",
+                spoken: "ธนบัตรหนึ่งพันบาท",
+                color: "#a8a29e",       // Platinum Slate
+                glow: "rgba(168, 162, 158, 0.45)"
+            }
+        };
+
+        const DEFAULT_THEME = {
+            color: "#3b82f6",
+            glow: "rgba(59, 130, 246, 0.3)"
+        };
+
+        // Application State
+        let model = null;
+        let webcam = null;
+        let currentMode = 'camera'; // 'camera' or 'upload'
+        let isRunning = false;
+        let isFrontCamera = false;
+        let soundEnabled = true;
+        let vibrationEnabled = true;
+
+        // Detection & Cooldown Handling
+        const CONFIDENCE_THRESHOLD = 0.86;
+        const COOLDOWN_MS = 2600;
+        let lastDetectedNote = null;
+        let lastSpokenTime = 0;
+        let stableDetectionCount = 0;
+        let thaiVoice = null;
+
+        // UI Element References
+        const overlay = document.getElementById("start-overlay");
+        const cameraBox = document.getElementById("camera-box");
+        const webcamContainer = document.getElementById("webcam-container");
+        const uploadPreviewBox = document.getElementById("upload-preview-box");
+        const uploadPrompt = document.getElementById("upload-prompt");
+        const imagePreview = document.getElementById("image-preview");
+        const uploadActions = document.getElementById("upload-actions");
+        const viewfinder = document.getElementById("viewfinder");
+        const laser = document.getElementById("laser");
+        const cameraHint = document.getElementById("camera-hint");
+        const tabCam = document.getElementById("tab-cam");
+        const tabUpload = document.getElementById("tab-upload");
+        const fileInput = document.getElementById("file-input");
+
+        const valNumber = document.getElementById("val-number");
+        const valUnit = document.getElementById("val-unit");
+        const spokenText = document.getElementById("spoken-text");
+        const badgeText = document.getElementById("badge-text");
+        const confidencePct = document.getElementById("confidence-pct");
+        const progressFill = document.getElementById("progress-fill");
+
+        const btnSound = document.getElementById("btn-sound");
+        const btnVibrate = document.getElementById("btn-vibrate");
+        const btnSwitchCam = document.getElementById("btn-switch-cam");
+
+        // Preload Web Speech voices
+        function initVoices() {
+            if (!('speechSynthesis' in window)) return;
+            const voices = window.speechSynthesis.getVoices();
+            thaiVoice = voices.find(v => v.lang === 'th-TH' || v.lang.startsWith('th')) || null;
+        }
+
+        if ('speechSynthesis' in window) {
+            initVoices();
+            window.speechSynthesis.onvoiceschanged = initVoices;
+        }
+
+        // Show Toast Notification
+        function showToast(msg) {
+            const toast = document.getElementById("toast");
+            toast.innerText = msg;
+            toast.classList.add("show");
+            setTimeout(() => toast.classList.remove("show"), 2000);
+        }
+
+        // Update Theme Colors Dynamically
+        function applyTheme(color, glow) {
+            document.documentElement.style.setProperty('--theme-color', color);
+            document.documentElement.style.setProperty('--theme-glow', glow);
+            document.getElementById("blob-1").style.background = `radial-gradient(circle, ${color}, transparent 70%)`;
+        }
+
+        // Unlock Mobile Audio & Start System
+        async function startApp() {
+            overlay.classList.add("hidden");
+            badgeText.innerText = "กำลังดาวน์โหลดโมเดล AI...";
+
+            // Unlock Web Audio context on mobile tap
+            if ('speechSynthesis' in window) {
+                const warmup = new SpeechSynthesisUtterance('');
+                window.speechSynthesis.speak(warmup);
+            }
+
+            try {
+                // 1. Load Model
+                await ensureModelLoaded();
+
+                badgeText.innerText = "กำลังเปิดกล้อง...";
+
+                // 2. Setup Camera
+                await initCamera(isFrontCamera);
+
+                isRunning = true;
+                badgeText.innerText = "พร้อมสแกน";
+                window.requestAnimationFrame(loop);
+            } catch (err) {
+                console.error("Initialization error:", err);
+                alert("ไม่สามารถเปิดใช้งานกล้องได้: " + (err.message || err));
+                overlay.classList.remove("hidden");
+            }
+        }
+
+        // Ensure AI Model is Loaded
+        async function ensureModelLoaded() {
+            if (!model) {
+                const modelURL = MODEL_URL + "model.json";
+                const metadataURL = MODEL_URL + "metadata.json";
+                model = await tmImage.load(modelURL, metadataURL);
+            }
+        }
+
+        // Initialize or Switch Camera
+        async function initCamera(frontFacing) {
+            if (webcam) {
+                try {
+                    webcam.stop();
+                } catch(e) {}
+            }
+
+            const width = 360;
+            const height = 360;
+            const flip = frontFacing;
+
+            webcam = new tmImage.Webcam(width, height, flip);
+            await webcam.setup({
+                facingMode: frontFacing ? "user" : "environment"
+            });
+            await webcam.play();
+
+            webcamContainer.innerHTML = "";
+            webcamContainer.appendChild(webcam.canvas);
+        }
+
+        // Switch Camera (Front <-> Back)
+        async function toggleCamera() {
+            if (currentMode !== 'camera') {
+                switchMode('camera');
+                return;
+            }
+            if (!model) return;
+
+            btnSwitchCam.style.transform = "rotate(180deg)";
+            showToast("กำลังสลับกล้อง...");
+
+            isFrontCamera = !isFrontCamera;
+            try {
+                await initCamera(isFrontCamera);
+                showToast(isFrontCamera ? "ใช้งานกล้องหน้า" : "ใช้งานกล้องหลัง");
+            } catch (err) {
+                console.error("Camera switch error:", err);
+                showToast("ไม่สามารถสลับกล้องได้");
+            }
+            setTimeout(() => { btnSwitchCam.style.transform = "none"; }, 300);
+        }
+
+        // Mode Switching: Camera <-> Upload Image
+        async function switchMode(mode) {
+            currentMode = mode;
+            if (mode === 'camera') {
+                tabCam.classList.add("active");
+                tabUpload.classList.remove("active");
+                webcamContainer.style.display = "flex";
+                uploadPreviewBox.classList.remove("active");
+                uploadActions.classList.remove("active");
+                btnSwitchCam.style.display = "flex";
+                laser.style.display = "block";
+                cameraHint.innerText = "ถือธนบัตรให้อยู่ในกรอบภาพ";
+                resetDisplayIdle();
+
+                // Resume webcam
+                if (webcam) {
+                    try { await webcam.play(); } catch(e) {}
+                } else if (model) {
+                    await initCamera(isFrontCamera);
+                }
+            } else {
+                tabCam.classList.remove("active");
+                tabUpload.classList.add("active");
+                webcamContainer.style.display = "none";
+                uploadPreviewBox.classList.add("active");
+                btnSwitchCam.style.display = "none";
+                laser.style.display = "none";
+                cameraHint.innerText = "โหมดสแกนรูปภาพ";
+
+                // Pause webcam to conserve resources
+                if (webcam) {
+                    try { webcam.pause(); } catch(e) {}
+                }
+            }
+        }
+
+        // File Input Trigger
+        function triggerFileInput() {
+            fileInput.click();
+        }
+
+        // Handle File Selected & Process
+        async function handleFileSelected(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            showToast("กำลังโหลดและวิเคราะห์รูปภาพ...");
+            switchMode('upload');
+
+            overlay.classList.add("hidden");
+            badgeText.innerText = "กำลังวิเคราะห์รูปภาพ...";
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                imagePreview.src = e.target.result;
+                imagePreview.style.display = "block";
+                uploadPrompt.style.display = "none";
+                uploadActions.classList.add("active");
+
+                imagePreview.onload = async () => {
+                    await ensureModelLoaded();
+                    await predictSingleImage(imagePreview);
+                };
+            };
+            reader.readAsDataURL(file);
+
+            // Reset input so same file can be re-selected if desired
+            event.target.value = "";
+        }
+
+        // Predict on Uploaded Single Image
+        async function predictSingleImage(imgElement) {
+            if (!model) return;
+
+            const predictions = await model.predict(imgElement);
+            let topClass = null;
+            let topProb = 0;
+
+            for (let i = 0; i < predictions.length; i++) {
+                const label = predictions[i].className;
+                const prob = predictions[i].probability;
+
+                const valEl = document.getElementById("val-" + label);
+                const itemEl = document.getElementById("prob-" + label);
+                if (valEl) valEl.innerText = Math.round(prob * 100) + "%";
+
+                if (itemEl) {
+                    if (prob > 0.4) {
+                        itemEl.classList.add("active");
+                    } else {
+                        itemEl.classList.remove("active");
+                    }
+                }
+
+                if (prob > topProb) {
+                    topProb = prob;
+                    topClass = label;
+                }
+            }
+
+            const confidenceDisplay = Math.round(topProb * 100);
+            confidencePct.innerText = confidenceDisplay + "%";
+            progressFill.style.width = confidenceDisplay + "%";
+
+            if (topProb >= 0.50 && BANKNOTE_CONFIG[topClass]) {
+                const config = BANKNOTE_CONFIG[topClass];
+                valNumber.innerText = topClass;
+                valNumber.style.color = config.color;
+                valUnit.style.display = "inline";
+                spokenText.innerText = "ธนบัตร" + config.name;
+                spokenText.style.color = config.color;
+                badgeText.innerText = `ตรวจพบธนบัตร ${topClass} บาท (ภาพถ่าย)`;
+
+                applyTheme(config.color, config.glow);
+
+                // Announce speech & vibrate
+                speakText(config.spoken);
+                triggerHaptic();
+            } else {
+                valNumber.innerText = "--";
+                spokenText.innerText = "ไม่พบธนบัตรที่ชัดเจนในรูปภาพนี้";
+                badgeText.innerText = "ไม่สามารถจำแนกได้";
+                applyTheme(DEFAULT_THEME.color, DEFAULT_THEME.glow);
+            }
+        }
+
+        // Toggle Sound Mute
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            btnSound.classList.toggle("disabled", !soundEnabled);
+            btnSound.innerText = soundEnabled ? "🔊" : "🔇";
+            showToast(soundEnabled ? "เปิดเสียงอ่าน" : "ปิดเสียงอ่าน");
+            if (!soundEnabled && 'speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+        }
+
+        // Toggle Vibration
+        function toggleVibration() {
+            vibrationEnabled = !vibrationEnabled;
+            btnVibrate.classList.toggle("disabled", !vibrationEnabled);
+            showToast(vibrationEnabled ? "เปิดระบบสั่น" : "ปิดระบบสั่น");
+        }
+
+        // Main Live Camera Animation Loop
+        async function loop() {
+            if (isRunning && currentMode === 'camera' && webcam && webcam.canvas) {
+                webcam.update();
+                await predictLive();
+            }
+            window.requestAnimationFrame(loop);
+        }
+
+        // Predict Live Webcam Stream
+        async function predictLive() {
+            if (!model || !webcam.canvas) return;
+
+            const predictions = await model.predict(webcam.canvas);
+            let topClass = null;
+            let topProb = 0;
+
+            for (let i = 0; i < predictions.length; i++) {
+                const label = predictions[i].className;
+                const prob = predictions[i].probability;
+
+                const valEl = document.getElementById("val-" + label);
+                const itemEl = document.getElementById("prob-" + label);
+                if (valEl) valEl.innerText = Math.round(prob * 100) + "%";
+
+                if (itemEl) {
+                    if (prob > 0.4) {
+                        itemEl.classList.add("active");
+                    } else {
+                        itemEl.classList.remove("active");
+                    }
+                }
+
+                if (prob > topProb) {
+                    topProb = prob;
+                    topClass = label;
+                }
+            }
+
+            const confidenceDisplay = Math.round(topProb * 100);
+            confidencePct.innerText = confidenceDisplay + "%";
+            progressFill.style.width = confidenceDisplay + "%";
+
+            if (topProb >= CONFIDENCE_THRESHOLD && BANKNOTE_CONFIG[topClass]) {
+                stableDetectionCount++;
+                if (stableDetectionCount >= 2) {
+                    applyDetectedBanknote(topClass, topProb);
+                }
+            } else {
+                stableDetectionCount = 0;
+                if (topProb < 0.65) {
+                    resetDisplayIdle();
+                }
+            }
+        }
+
+        // Apply Detected Note State in Live Mode
+        function applyDetectedBanknote(noteValue, confidence) {
+            const config = BANKNOTE_CONFIG[noteValue];
+            if (!config) return;
+
+            valNumber.innerText = noteValue;
+            valNumber.style.color = config.color;
+            valUnit.style.display = "inline";
+            spokenText.innerText = "ธนบัตร" + config.name;
+            spokenText.style.color = config.color;
+            badgeText.innerText = "ตรวจพบธนบัตร " + noteValue + " บาท";
+
+            applyTheme(config.color, config.glow);
+
+            const now = Date.now();
+            const isDifferentNote = (lastDetectedNote !== noteValue);
+            const isCooldownExpired = (now - lastSpokenTime > COOLDOWN_MS);
+
+            if (isDifferentNote || isCooldownExpired) {
+                lastDetectedNote = noteValue;
+                lastSpokenTime = now;
+
+                speakText(config.spoken);
+                triggerHaptic();
+            }
+        }
+
+        // Reset Display to Idle
+        function resetDisplayIdle() {
+            badgeText.innerText = "กำลังส่องหาธนบัตร...";
+            lastDetectedNote = null;
+            applyTheme(DEFAULT_THEME.color, DEFAULT_THEME.glow);
+        }
+
+        // Speech Synthesis Handler
+        function speakText(text) {
+            if (!soundEnabled || !('speechSynthesis' in window)) return;
+
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'th-TH';
+            utterance.rate = 1.05;
+            utterance.pitch = 1.0;
+
+            if (thaiVoice) {
+                utterance.voice = thaiVoice;
+            }
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // Haptic Vibration Handler
+        function triggerHaptic() {
+            if (!vibrationEnabled) return;
+            if ('vibrate' in navigator) {
+                try {
+                    navigator.vibrate([100, 50, 100]);
+                } catch(e) {}
+            }
+        }
+    </script>
+</body>
+</html>
